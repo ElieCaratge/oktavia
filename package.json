@@ -1,0 +1,23 @@
+{
+  "name": "oktavia",
+  "version": "1.0.0",
+  "description": "ART 3 est une association regroupant des professeurs de musique et une équipe de musiciens professionnels.\nAfin d’améliorer les cours proposés par les écoles de musique, le client souhaite développer un outil digital pour accompagner les cours de chant et d'instruments en école de musique et favoriser le blended-learning.\nAinsi, le client a décidé de faire appel à Junior CentraleSupélec, forte de son expérience en développement mobile et en développement web, pour mener à bien son projet.",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.16.1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ElieCaratge/oktavia.git"
+  },
+  "author": "Élie Caratgé <ecaratge@gmail.com>, Amadou Sékou Fofana",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/ElieCaratge/oktavia/issues"
+  },
+  "homepage": "https://github.com/ElieCaratge/oktavia#readme"
+}

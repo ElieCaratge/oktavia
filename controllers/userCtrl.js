@@ -1,9 +1,13 @@
+const bcrypt = require('bcrypt');
 const User = require("../models/user")
+
+// Number of iterations of hash process
+const hashTurn = 10;
 
 /*
 * Create and save a new user
 */
-exports.create = (req, res) => {
+exports.create = (req, res, next) => {
     const newUser = new User({
         ...req.body
     });
@@ -23,7 +27,7 @@ exports.create = (req, res) => {
 /*
 * Find a single user with a userId
 */
-exports.findOne = (req, res) => {
+exports.findOne = (req, res, next) => {
     User.findById(req.params.userId)
         .then((data) => {
             if (!data) {
@@ -49,7 +53,7 @@ exports.findOne = (req, res) => {
 /*
 * Collect all users from the database
 */
-exports.findAll = (req, res) => {
+exports.findAll = (req, res, next) => {
     User.find()
         .then((data) => {
             res.status(200).send(data)
@@ -66,15 +70,14 @@ exports.findAll = (req, res) => {
 /*
 * Update a user identified by his userId
 */
-exports.update = (req, res) => {
+exports.update = (req, res, next) => {
     User.findByIdAndUpdate(
         req.params.userId,
         {
             firstName: req.body.firstName,
             lastName: req.body.lastName,
             email: req.body.email,
-            pwd: req.body.pwd,
-            preparesFor: req.body.preparesFor
+            password: req.body.password
         },
         { new: true }
     )
@@ -102,7 +105,7 @@ exports.update = (req, res) => {
 /*
 * Delete a user with the specified userId in the request
 */
-exports.delete = (req, res) => {
+exports.delete = (req, res, next) => {
     User.findByIdAndRemove(req.params.userId)
         .then((data) => {
             if (!data) {
@@ -128,7 +131,7 @@ exports.delete = (req, res) => {
 /*
 * Delete all users from the database
 */
-exports.deleteAll = (req, res) => {
+exports.deleteAll = (req, res, next) => {
     User.deleteMany()
         .then((data) => {
             if (!data) {
@@ -144,4 +147,39 @@ exports.deleteAll = (req, res) => {
                     err.message || "Could not delete users!",
             });
         });
+};
+
+
+/*
+* Signup user
+*/
+exports.signUp = (req, res, next) => {
+    bcrypt.hash(req.body.password, hashTurn)
+        .then( hash => {
+            req.body.password = hash;
+            const newUser = new User({
+                ...req.body
+            });
+            newUser.save()
+                .then((data) => {
+                    res.status(201).send(data);
+                })
+                .catch((err) => {
+                    res.status(500).send({
+                        message:
+                            err.message || "Some error occurred while creating the user.",
+                    });
+                });
+            })
+        .catch( (error) => {
+            res.status(500).json({error});
+        });
+};
+
+
+/*
+* Login user
+*/
+exports.signIn = (req, res, next) => {
+    next();
 };

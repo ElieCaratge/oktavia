@@ -7,9 +7,12 @@ const hashTurn = 10;
 /*
 * Create and save a new user
 */
-exports.create = (req, res, next) => {
+const create = (req, res, next) => {
     const newUser = new User({
-        ...req.body
+        firstName: req.body.firstName,
+        lastName: req.body.lastName,
+        email: req.body.email,
+        password: req.body.password
     });
     newUser.save()
         .then((data) => {
@@ -19,6 +22,7 @@ exports.create = (req, res, next) => {
             res.status(500).send({
                 message:
                     err.message || "Some error occurred while creating the user.",
+                body: this
             });
         });
 };
@@ -27,7 +31,7 @@ exports.create = (req, res, next) => {
 /*
 * Find a single user with a userId
 */
-exports.findOne = (req, res, next) => {
+const findOne = (req, res, next) => {
     User.findById(req.params.userId)
         .then((data) => {
             if (!data) {
@@ -53,7 +57,7 @@ exports.findOne = (req, res, next) => {
 /*
 * Collect all users from the database
 */
-exports.findAll = (req, res, next) => {
+const findAll = (req, res, next) => {
     User.find()
         .then((data) => {
             res.status(200).send(data)
@@ -70,7 +74,7 @@ exports.findAll = (req, res, next) => {
 /*
 * Update a user identified by his userId
 */
-exports.update = (req, res, next) => {
+const update = (req, res, next) => {
     User.findByIdAndUpdate(
         req.params.userId,
         {
@@ -105,7 +109,7 @@ exports.update = (req, res, next) => {
 /*
 * Delete a user with the specified userId in the request
 */
-exports.delete = (req, res, next) => {
+const deleteOne = (req, res, next) => {
     User.findByIdAndRemove(req.params.userId)
         .then((data) => {
             if (!data) {
@@ -131,7 +135,7 @@ exports.delete = (req, res, next) => {
 /*
 * Delete all users from the database
 */
-exports.deleteAll = (req, res, next) => {
+const deleteAll = (req, res, next) => {
     User.deleteMany()
         .then((data) => {
             if (!data) {
@@ -153,24 +157,12 @@ exports.deleteAll = (req, res, next) => {
 /*
 * Signup user
 */
-exports.signUp = (req, res, next) => {
+const signUp = (req, res, next) => {
     bcrypt.hash(req.body.password, hashTurn)
         .then( hash => {
             req.body.password = hash;
-            const newUser = new User({
-                ...req.body
-            });
-            newUser.save()
-                .then((data) => {
-                    res.status(201).send(data);
-                })
-                .catch((err) => {
-                    res.status(500).send({
-                        message:
-                            err.message || "Some error occurred while creating the user.",
-                    });
-                });
-            })
+            create(req, res, next);
+        })
         .catch( (error) => {
             res.status(500).json({error});
         });
@@ -180,6 +172,12 @@ exports.signUp = (req, res, next) => {
 /*
 * Login user
 */
-exports.signIn = (req, res, next) => {
+const signIn = (req, res, next) => {
     next();
 };
+
+
+/*
+* Exporting controller functions
+* */
+module.exports = { create, findOne, findAll, update, deleteOne, deleteAll, signUp, signIn};

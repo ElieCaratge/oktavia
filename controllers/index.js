@@ -1,3 +1,4 @@
 module.exports = {
-    userCtrl: require('./userCtrl')
+    userCtrl: require('./userCtrl'),
+    fileCtrl: require('./fileCtrl'),
 };

@@ -1,5 +1,6 @@
 const express = require('express');
 const { userCtrl } = require('../controllers/')
+const { auth } = require('../middlewares');
 
 const router = express.Router();
 
@@ -9,11 +10,11 @@ router.use(function timeLog(req, res, next) {
     next();
 });
 
-router.get('/:userId',  userCtrl.findOne);
-router.get('/',  userCtrl.findAll);
-router.put('/:userId',  userCtrl.update);
-router.delete('/:userId',  userCtrl.deleteOne);
-router.delete('/', userCtrl.deleteAll);
+router.get('/:userId', auth, userCtrl.findOne);
+router.get('/', auth, userCtrl.findAll);
+router.put('/:userId', auth, userCtrl.update);
+router.delete('/:userId', auth, userCtrl.deleteOne);
+router.delete('/', auth, userCtrl.deleteAll);
 router.post('/signup', userCtrl.signUp);
 router.post('/signin', userCtrl.signIn);
 

@@ -6,17 +6,16 @@ const { File } = require("../models");
 */
 const create = (req, res, next) => {
 
-    // Check if request body is ok.
-    if (!req.body || !(req.body instanceof Object)) {
-        res.status(400).send({
-            message: "Invalid request. req.body must be of type Object."
-        });
-    }
+    const fileObject = JSON.parse(req.body.file);
+    delete fileObject._id;
+    delete fileObject._userId;
+
 
     // Creating data
     const newFile = new File({
-        contentType: req.body.contentType,
-        image: req.body.image,
+        ...fileObject,
+        userId: req.auth.userId,
+        url: `${req.protocol}://${req.hostname}/files/${req.file.name}`
     });
     newFile.save()
         .then((data) => {
@@ -83,7 +82,8 @@ const update = (req, res, next) => {
         req.params.fileId,
         {
             contentType: req.body.contentType,
-            image: req.body.image,
+            userId: req.body.userId,
+            url: req.body.url
         },
         { new: true }
     )
@@ -156,15 +156,4 @@ const deleteAll = (req, res, next) => {
 };
 
 
-const uploadSingle = (req, res, next) => {
-    var img = fs.readFileSync(req.file.path);
-    var encode_image = img.toString('base64');
-    create({
-        body:{
-            contentType: req.file.mimetype,
-            image: Buffer.from(encode_image, 'base64'),
-        }
-    }, res, next);
-};
-
-module.exports = { uploadSingle };
+module.exports = { create };

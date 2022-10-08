@@ -3,9 +3,9 @@ const uniqueValidator = require('mongoose-unique-validator');
 
 const fileSchema = new mongoose.Schema({
     contentType: {type: String, required: true},
-    image: {type: String}
+    url: {type: String, required: true},
+    // Utilisateur ayant uploadé le fichier, pour retrouver l'origine
+    userId: {type: String, required: true},
 });
-
-fileSchema.plugin(uniqueValidator)
 
 module.exports = mongoose.model("File", fileSchema);

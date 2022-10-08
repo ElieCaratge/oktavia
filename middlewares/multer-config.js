@@ -10,7 +10,7 @@ const MIMETYPE = {
 const storage = new multer.diskStorage({
     // The folder to which the file has been saved
     destination: (req, file, callback) => {
-        callback(null, __dirname + '\\..\\files\\');
+        callback(null, path.join(__dirname, '..', 'files'));
     },
     // The name of the file within the destination
     filename: (req, file, callback) => {
@@ -21,5 +21,5 @@ const storage = new multer.diskStorage({
     }
 })
 
-module.exports = { storage };
+module.exports = multer({ storage }).single('file');
 

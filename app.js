@@ -1,7 +1,7 @@
 const express = require('express');
 const mongoose = require('mongoose');
 const config = require('config');
-const {userRouter, fileRouter} = require("./routes");
+const { userRouter, fileRouter } = require("./routes");
 const bodyParser = require('body-parser');
 
 /*
@@ -30,8 +30,10 @@ mongoose.connect(connexionString, { useNewUrlParser: true })
 /*
 * Routes
 */
+
 app.get('/', (req, res) => { res.send("Hello World !"); });
 app.use('/user', userRouter);
 app.use('/file', fileRouter);
+app.use('/files', express.static(path.join(__dirname, 'files')));
 
 module.exports = app;

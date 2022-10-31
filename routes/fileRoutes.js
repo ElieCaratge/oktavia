@@ -5,8 +5,12 @@ const fs = require('fs');
 
 const router = express.Router();
 const fileCast = (req, res, next) => {
-    delete req.body.files;
-    req.body.files = [req.params.fileId];
+    if (req.params.fileId){
+        delete req.body.files;
+        req.body.files = [req.params.fileId];
+    } else if (!req.body.files) {
+        req.body.files = [];
+    }
     next();
 };
 const setSoft = (softParam) => {
@@ -31,17 +35,18 @@ router.use(function requestLog(req, res, next) {
 * app.use('/files', express.static(path.join(__dirname, 'files')));
 * Enables access to every file.
 * */
-router.get('/get', auth, userCtrl.getFilesByUser);
-router.get('/:fileId', auth, fileCast, fileAccess.canReadMiddleware, fileCtrl.findOne);
+router.get('', auth, fileCtrl.getFilesByUser);
+router.delete('', auth, fileCast, fileAccess.canReadMiddleware, setSoft(true), fileCtrl.deleteMany)
+router.get('/get/:fileId', auth, fileCast, fileAccess.canReadMiddleware, fileCtrl.findOne);
+router.delete('/delete/:fileId', auth, fileCast, fileAccess.canReadMiddleware, setSoft(true), fileCtrl.deleteOne);
 router.post('/share', auth, fileAccess.canReadMiddleware, fileCtrl.share);
 router.post('/upload', auth, upload.single('file'), fileCtrl.create);
-router.delete('/:fileId', auth, fileCast, fileAccess.canReadMiddleware, setSoft(true), fileCtrl.deleteOne);
 
 /*
 * PRIVATE ROUTES
 * */
-router.get('', fileCtrl.findAll);
-router.delete('', fileCtrl.deleteAll);
-router.post('/giveAccess', auth, fileCtrl.giveAccess);
+// TODO: Ajouter un middleware pour checker les droits administrateur.
+router.get('/all', fileCtrl.findAll);
+router.delete('/all', fileCtrl.deleteAll);
 
 module.exports = router;

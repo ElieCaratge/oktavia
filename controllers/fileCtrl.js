@@ -81,6 +81,22 @@ const findAll = (req, res, next) => {
 
 
 /*
+* To get all the files the current user has access to. (Requires authentification)
+* */
+const getFilesByUser = (req, res, next) => {
+    User.findById(req.auth.userId).populate('files')
+        .then((data) => {
+                res.status(200).send(data.files);
+                next();
+            }
+        )
+        .catch((err) => {
+            res.status(500).send({message: err.message || 'Error while retrieving files from current user.'});
+        });
+}
+
+
+/*
 * Update a file identified by his fileId
 */
 const update = (req, res, next) => {
@@ -144,7 +160,7 @@ const deleteOneFunction = async (fileId, userId, soft=true) => {
                     return docs;
                 });
             // Then removing all its references
-            await User.update({_id: {$in: docs.users}}, {$pull: {files: docs._id}});
+            await User.updateMany({_id: {$in: docs.users}}, {$pull: {files: docs._id}});
             // Finally, removing the file on the server.
             // Source: https://www.bezkoder.com/node-js-delete-file/
             fs.unlinkSync(path.join(__dirname, '..', 'files', docs.filename));
@@ -161,7 +177,7 @@ const deleteOneFunction = async (fileId, userId, soft=true) => {
 const deleteOne = (req, res, next) => {
     deleteOneFunction(req.params.fileId, req.auth.userId, req.body.soft || true)
         .then(() => {
-            res.status(204).send({ message: "File deleted successfully!" });
+            res.status(200).send({ message: "File deleted successfully!" });
             next();
         })
         .catch((err) => {
@@ -183,7 +199,7 @@ const deleteOne = (req, res, next) => {
 const deleteAll = (req, res, next) => {
     let asyncRequests = [];
     asyncRequests.push(File.deleteMany().catch((err) => {throw {err: err, type: "mongoose.File"}}));
-    asyncRequests.push(User.update({}, {files: []}).catch((err) => {throw {err: err, type: "mongoose.User"}}));
+    asyncRequests.push(User.updateMany({}, {files: []}).catch((err) => {throw {err: err, type: "mongoose.User"}}));
     async function deleteFiles(){
         try {
             const files = fs.readdirSync(path.join(__dirname, '..', 'files'));
@@ -230,24 +246,45 @@ const deleteAll = (req, res, next) => {
 * @param {Array} req.body.files List of files to remove.
 * */
 const deleteMany = (req, res, next) => {
-    let asyncRequests = []
-    for (const file of req.body.files) {
-        asyncRequests.push(deleteOneFunction(file, req.auth.userId));
+    if (req.body.files.length === 0){
+        deleteFilesByUser(req, res, next);
+    } else {
+        let asyncRequests = []
+        for (const file of req.body.files) {
+            asyncRequests.push(deleteOneFunction(file, req.auth.userId, req.body.soft || true));
+        }
+        Promise.all(asyncRequests)
+            .then(() => {
+                res.status(200).send({message: "Files deleted successfully !"});
+                next();
+            })
+            .catch((err) => {
+                if (err.kind === "ObjectId" || err.name === "NotFound") {
+                    return res.status(404).send({
+                        message: err.message || "File not found."
+                    });
+                }
+                return res.status(500).send({
+                    message: err.message || "Could not delete some file."
+                });
+            });
     }
-    Promise.all(asyncRequests)
-        .then(() => {
-            res.status(204).send({message: "Files deleted successfully !"});
+}
+
+
+/*
+* Delete all the files the current user has access to.
+* */
+const deleteFilesByUser = (req, res, next) => {
+    User.findById(req.auth.userId)
+        .then((user) => {
+            File.deleteMany({_id: {$in: user.files}})
+                .then(() => {res.status(200).send({message: "Successfully removed all user's file !"})})
+                .catch((err) => {return res.status(500).send({message: err.message || "Error while removing all user's file."});})
         })
         .catch((err) => {
-            if (err.kind === "ObjectId" || err.name === "NotFound") {
-                return res.status(404).send({
-                    message: err.message || "File not found."
-                });
-            }
-            return res.status(500).send({
-                message: err.message || "Could not delete some file."
-            });
-        });
+            return res.status(500).send({message: err.message || "Error while retrieving all user's file."});
+        })
 }
 
 
@@ -304,13 +341,17 @@ const giveAccess = (req, res, next) => {
 
 
 /* To give access to several files to a single user.
-* @param {String} req.body.user Id of the user to share the files.
+* @param {String} req.body.user Id of the user to share the files to. This argument has priority over req.body.users.
+* @param {Array} req.body.users List of Ids of users to share the files to.
 * @param {String} req.body.files The files to share.
 * */
 const share = (req, res, next) => {
-    req.body.users = [req.body.user];
+    if (req.body.user) {
+        delete req.body.users;
+        req.body.users = [req.body.user];
+    }
     giveAccess(req, res, next);
 }
 
 
-module.exports = { create, giveAccess, findOne, findAll, deleteOne, deleteAll, share };
+module.exports = { create, giveAccess, findOne, findAll, getFilesByUser, deleteOne, deleteAll, deleteMany, deleteFilesByUser, share };

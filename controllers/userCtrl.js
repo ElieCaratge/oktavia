@@ -210,21 +210,6 @@ const signIn = (req, res, next) => {
 
 
 /*
-* To get all the files the current user has access to. (Requires authentification)
-* */
-const getFilesByUser = (req, res, next) => {
-    User.findById(req.auth.userId).populate('files')
-        .then((data) => {
-                res.status(200).send(data.files);
-            }
-        )
-        .catch((err) => {
-            res.status(500).send({message: err.message || 'Error while retrieving files from current user.'});
-        });
-}
-
-
-/*
 * Exporting controller functions
 * */
 module.exports = {
@@ -235,6 +220,5 @@ module.exports = {
     deleteOne,
     deleteAll,
     signUp,
-    signIn,
-    getFilesByUser
+    signIn
 };

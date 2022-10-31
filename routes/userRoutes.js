@@ -6,7 +6,7 @@ const router = express.Router();
 
 // middlewares specific to this router
 router.use(function timeLog(req, res, next) {
-    console.log(req.method, req.hostname);
+    console.log(req.method, req.hostname + req.originalUrl, 'on', Date());
     next();
 });
 

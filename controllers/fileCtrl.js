@@ -114,106 +114,140 @@ const update = (req, res, next) => {
 };
 
 
-/*
-* Delete a file with the specified fileId in the request
-*/
-const deleteOne = (req, res, next) => {
+/* Intermediate function to delete a single file. It is both used in deleteOne and deleteMany methods.
+* @param {String} fileId Id of the file to delete.
+* */
+const deleteOneFunction = async (fileId, userId, soft=true) => {
     // Source: https://www.geeksforgeeks.org/mongoose-findbyidandremove-function/
-    File.findByIdAndRemove(req.params.fileId, (err, docs) => {
-        if (err) {
+    // Removing the File object in database.
+    try {
+        if (soft) {
+            const file = await File.findById(fileId);
+            if (file.users.length > 1) {
+                let asyncRequests = [
+                    User.findByIdAndUpdate(userId, {$pull: {files: file._id}}),
+                    File.findByIdAndUpdate(fileId, {$pull: {users: userId}})
+                ]
+                await Promise.all(asyncRequests);
+            } else {
+                await deleteOneFunction(fileId, false);
+            }
+        } else {
+            const docs = await File.findByIdAndRemove(fileId)
+                .then((docs) => {
+                    // Checking docs are not null.
+                    if (docs === null) {
+                        let err = new Error("");
+                        err.name = "NotFound";
+                        throw err;
+                    }
+                    return docs;
+                });
+            // Then removing all its references
+            await User.update({_id: {$in: docs.users}}, {$pull: {files: docs._id}});
+            // Finally, removing the file on the server.
+            // Source: https://www.bezkoder.com/node-js-delete-file/
+            fs.unlinkSync(path.join(__dirname, '..', 'files', docs.filename));
+        }
+    } catch (err) {
+        throw err;
+    }
+}
+
+
+/*
+* Delete a file with the specified fileId in the request.
+* */
+const deleteOne = (req, res, next) => {
+    deleteOneFunction(req.params.fileId, req.auth.userId, req.body.soft || true)
+        .then(() => {
+            res.status(204).send({ message: "File deleted successfully!" });
+            next();
+        })
+        .catch((err) => {
             if (err.kind === "ObjectId" || err.name === "NotFound") {
                 return res.status(404).send({
                     message: "File not found with id " + req.params.fileId,
                 });
             }
             return res.status(500).send({
-                message: "Could not delete file with id " + req.params.fileId,
+                message: err.message || "Could not delete file with id " + req.params.fileId,
             });
-        }
-        // Source: https://www.bezkoder.com/node-js-delete-file/
-        fs.unlink(path.join(__dirname, '..', 'files', docs.filename), (err) => {
-                if (err) {
-                    res.status(500).send({message: `Unable to delete file ${docs.url}`});
-                }
-                res.status(204).send({ message: "File deleted successfully!" });
-            });
-    });
-    return next();
+        });
 };
 
 
 /*
 * Delete all files from the database. Use it carefully.
-*/
+* */
 const deleteAll = (req, res, next) => {
-    File.deleteMany((err, docs) => {
-        if (err) {
-            return res.status(500).send({
-                message:
-                    err.message || "Could not delete files!",
-            });
-        } else {
-            if (!docs) {
-                return res.status(404).send({
-                    message: "No file found in database!",
-                });
-            }
-            fs.readdir(path.join(__dirname, '..', 'files'), (err, files) => {
-                files.forEach(
-                    (file) => {
-                        try {
-                            fs.unlinkSync(path.join(__dirname, '..', 'files', file));
-                        } catch (err) {
-                            if (err) {
-                                return res.status(500).send({message: `Unable to delete file ${file}`});
-                            }
+    let asyncRequests = [];
+    asyncRequests.push(File.deleteMany().catch((err) => {throw {err: err, type: "mongoose.File"}}));
+    asyncRequests.push(User.update({}, {files: []}).catch((err) => {throw {err: err, type: "mongoose.User"}}));
+    async function deleteFiles(){
+        try {
+            const files = fs.readdirSync(path.join(__dirname, '..', 'files'));
+            files.forEach(
+                (file) => {
+                    try {
+                        fs.unlinkSync(path.join(__dirname, '..', 'files', file));
+                    } catch (err) {
+                        if (err) {
+                            throw {err: err, type: "server", file: file};
                         }
                     }
-                )
-                res.status(200).send({message: "Files removed successfully !"});
-                return next();
-            });
+                }
+            );
+        } catch (err) {
+            throw {err: err, type: "server"};
         }
-    })
+    }
+    asyncRequests.push(deleteFiles());
+
+    Promise.all(asyncRequests)
+        .then(() => {
+            res.status(200).send({message: "Files removed successfully !"});
+            return next();
+        })
+        .catch((err) => {
+            if (err.type==="mongoose.File") {
+                return res.status(500).send({message: err.err.message || "Error while removing files in mongoDB."});
+            } else if (err.type==="mongoose.User") {
+                return res.status(500).send({message: err.err.message || "Error while updating users in mongoDB."});
+            } else if (err.type==="server" && err.file) {
+                return res.status(500).send({message: `Unable to delete file with id ${err.file}`})
+            } else if (err.type==="server" && !err.file) {
+                return res.status(500).send({message: err.err.message || "Unable to delete files from the server."})
+            } else {
+                return res.status(500).send({message: err.message || "Error while removing files from the server."})
+            }
+        })
 };
 
 
 /*
 * Delete several files using a filter.
-* @param {Object} req.body.filter Filter used to find files and remove them.
+* @param {Array} req.body.files List of files to remove.
 * */
 const deleteMany = (req, res, next) => {
-    // TODO: req.body.filter est-il le bon argument ?
-    if (!req.body.filter) {
-        return res.status(400).send({message: 'Please check your filter.'})
+    let asyncRequests = []
+    for (const file of req.body.files) {
+        asyncRequests.push(deleteOneFunction(file, req.auth.userId));
     }
-    File.find(req.body.filter, (err, docs) => {
-        if (err) {
-            return res.status(500).send({message: err.message || 'Error while retrieving files.'});
-        }
-        for (const doc in docs) {
-            // TODO: remove duplicate code fragments
-            File.findOneAndDelete(doc._id, (err, docs) => {
-                if (err) {
-                    if (err.kind === "ObjectId" || err.name === "NotFound") {
-                        return res.status(404).send({
-                            message: "File not found with id " + req.params.fileId,
-                        });
-                    }
-                    return res.status(500).send({
-                        message: "Could not delete file with id " + req.params.fileId,
-                    });
-                }
-                fs.unlink(path.join(__dirname, '..', 'files', docs.filename), (err) => {
-                    if (err) {
-                        res.status(500).send({message: `Unable to delete file ${docs.url}`});
-                    }
-                    res.status(204).send({ message: "File deleted successfully!" });
+    Promise.all(asyncRequests)
+        .then(() => {
+            res.status(204).send({message: "Files deleted successfully !"});
+        })
+        .catch((err) => {
+            if (err.kind === "ObjectId" || err.name === "NotFound") {
+                return res.status(404).send({
+                    message: err.message || "File not found."
                 });
+            }
+            return res.status(500).send({
+                message: err.message || "Could not delete some file."
             });
-        }
-    });
-    return next();
+        });
 }
 
 
@@ -234,41 +268,49 @@ const giveAccess = (req, res, next) => {
                 message: 'Invalid req.body format. Please make sure it matches {users: [], files: []} pattern'
             });
     }
-    for (const fileKey in req.body.files) {
-        for (const userKey in req.body.users) {
-            // Source: https://www.bezkoder.com/mongodb-many-to-many-mongoose/
-            File.findByIdAndUpdate(
-                fileKey,
-                { $addToSet: {users: userKey}}
-            )
-                .catch((err) => {
-                    // TODO: Faut-il arrêter le process ou passer à la suite ?
-                    return res.status(500).send({
-                        message:
-                            err.message || `Could not update the file ${fileKey} when adding user ${userKey}!`,
-                    })
-                });
+
+    let asyncRequests = [];
+
+    for (const userKey of req.body.users) {
+        asyncRequests.push(
             User.findByIdAndUpdate(
                 userKey,
-                { $addToSet: {files: fileKey}}
+                // https://www.mongodb.com/docs/manual/reference/operator/update/addToSet/#-each-modifier
+                { $addToSet: {files: { $each : req.body.files }}}
             )
-                .catch((err) => {
-                    return res.status(500).send({
-                        message:
-                            err.message || `Could not update the user ${userKey} when adding the file ${fileKey}!`,
-                    })
-                });
-        }
+        );
     }
-    res.status(200).send({ message: 'Successfully updated users access !' });
-    next();
+    for (const fileKey of req.body.files) {
+        // Source: https://www.bezkoder.com/mongodb-many-to-many-mongoose/
+        asyncRequests.push(
+            File.findByIdAndUpdate(
+                fileKey,
+                { $addToSet: { users: { $each: req.body.users }}}
+            )
+        );
+    }
+    Promise.all(asyncRequests)
+        .then(() => {
+            res.status(200).send({ message: 'Successfully updated users access !' });
+            next();
+        })
+        .catch((err) => {
+        return res.status(500).send({
+            message:
+                err.message || `Could not update file and users access !`
+        })
+    })
 }
 
 
+/* To give access to several files to a single user.
+* @param {String} req.body.user Id of the user to share the files.
+* @param {String} req.body.files The files to share.
+* */
 const share = (req, res, next) => {
-    req.body.users = [req.body.user]
+    req.body.users = [req.body.user];
     giveAccess(req, res, next);
 }
 
 
-module.exports = { create, giveAccess, findAll, deleteOne, deleteAll, share };
+module.exports = { create, giveAccess, findOne, findAll, deleteOne, deleteAll, share };

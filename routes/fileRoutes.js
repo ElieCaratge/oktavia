@@ -1,41 +1,47 @@
-const { auth, upload, fileAccess} = require('../middlewares');
+const { auth, upload, fileAccess } = require('../middlewares');
 const { fileCtrl, userCtrl } = require('../controllers');
 const express = require("express");
 const fs = require('fs');
 
 const router = express.Router();
+const fileCast = (req, res, next) => {
+    delete req.body.files;
+    req.body.files = [req.params.fileId];
+    next();
+};
+const setSoft = (softParam) => {
+    return (req, res, next) => {
+        delete req.body.soft;
+        req.body.soft = softParam;
+        next();
+    }
+}
 
 // middlewares specific to this router
 router.use(function requestLog(req, res, next) {
-
     console.log(req.method, req.hostname + req.originalUrl, 'on', Date());
     next();
 });
 
-// ------------------------------------------------
-// TODO: Delete or protect these routes.
-router.get('', fileCtrl.findAll);
-// TODO: Faire la suppression du fichier serveur ici.
-// TODO: Suppression de plusieurs fichiers avec un filtre.
-router.delete('/:fileId', fileCtrl.deleteOne);
-router.delete('', fileCtrl.deleteAll);
-router.post('/upload', auth, upload.single('file'), fileCtrl.create);
-/* Example of req.body pattern :
-* {
-*   users: ["634a9ba6cc7475cc12ba94ea", "634a9ba6cc7475cc12ba94ea"],
-*   files: ["634a9ba6cc7475cc12ba94ea", "634a9ba6cc7475cc12ba94ea", "634a9ba6cc7475cc12ba94ea"],
-* }
+/*
+* PUBLIC ROUTES
 * */
-router.post('/giveAccess', auth, fileCtrl.giveAccess);
-// ------------------------------------------------
-
 /* Reminder :
 * In ../app.js,
 * app.use('/files', express.static(path.join(__dirname, 'files')));
 * Enables access to every file.
 * */
-// TODO: Vérifier cette route
 router.get('/get', auth, userCtrl.getFilesByUser);
-router.post('/share', auth, fileAccess.canReadMiddleware, (req, res, next) => {res.status(200).send({message: "Ouais c'est ok ouais !"})});
+router.get('/:fileId', auth, fileCast, fileAccess.canReadMiddleware, fileCtrl.findOne);
+router.post('/share', auth, fileAccess.canReadMiddleware, fileCtrl.share);
+router.post('/upload', auth, upload.single('file'), fileCtrl.create);
+router.delete('/:fileId', auth, fileCast, fileAccess.canReadMiddleware, setSoft(true), fileCtrl.deleteOne);
+
+/*
+* PRIVATE ROUTES
+* */
+router.get('', fileCtrl.findAll);
+router.delete('', fileCtrl.deleteAll);
+router.post('/giveAccess', auth, fileCtrl.giveAccess);
 
 module.exports = router;

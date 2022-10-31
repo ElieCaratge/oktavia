@@ -29,38 +29,32 @@ const canRead = async (fileId, userId) => {
 * This middleware only removes from the list the ids the user has not access to.
 * @param {Array} req.body.files List of the id of the files we have to check access
 * */
-// TODO: Adapter cette méthode en asynchrone
-// TODO: Tester cette méthode en partant de la route share.
-const canReadMiddleware = async (req, res, next) => {
+const canReadMiddleware = (req, res, next) => {
     if (!req.body.files) {
         return res.status(404).send({message: "Invalid request for middleware. Please put your files id in req.body.files."});
-    } else {
-        for (const fileId of req.body.files) {
-
-            // VERSION ASYNCHRONE
-            // TODO : faire cette version (plus efficace).
-            // canRead(fileId, req.userId)
-            //     .catch((err) => {
-            //         return res.status(404).send({message: err.message || `Error while checking user access for file ${fileId}`});
-            //     })
-            //     .then((accessRight) => {
-            //         if (!accessRight) {
-            //             return res.status(404).send({message: `User ${req.userId} have no access to file ${fileId}`});
-            //         }
-            //     });
-
-            //    VERSION SYNCHRONE
-            try {
-                const accessRight = await canRead(fileId, req.auth.userId)
-                if (!accessRight) {
-                    return res.status(404).send({message: `User ${req.auth.userId} have no access to file ${fileId}`});
-                }
-            } catch (err) {
-                return res.status(404).send({message: err.message || `Error while checking user access for file ${fileId}`});
-            }
-        }
-        next();
     }
+
+    let asyncRequests = [];
+    for (const fileId of req.body.files) {
+        asyncRequests.push(
+            canRead(fileId, req.auth.userId)
+                .catch((err) => {
+                    throw new Error(err.message || `Error while checking user access for file ${fileId}`)
+                })
+                .then((accessRight) => {
+                    if (accessRight===false) {
+                        throw new Error(`User ${req.auth.userId} have no access to file ${fileId}`);
+                    }
+                })
+        );
+    }
+    Promise.all(asyncRequests)
+        .then(() => {
+            next();
+        })
+        .catch((err) => {
+            return res.status(404).send({message: err.message});
+        })
 }
 
 module.exports = {canRead, canReadMiddleware};
